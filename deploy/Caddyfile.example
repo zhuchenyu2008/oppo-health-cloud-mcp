@@ -1,0 +1,5 @@
+# 将此文件复制为 Caddyfile，并把域名替换为实际公开地址。
+health.example.com {
+    encode gzip
+    reverse_proxy 127.0.0.1:8000
+}

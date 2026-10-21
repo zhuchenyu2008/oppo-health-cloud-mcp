@@ -1,6 +1,14 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+.env
+config.toml
+data/
+*.sqlite3
+*.db
 auth.json
+secrets/
 cookies.json
 sign_samples.json
-*.db
-__pycache__/
 *.log

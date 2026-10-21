@@ -16,21 +16,41 @@ httpSecret = XXTEA解密(BuildConfig.httpSecret常量, 两个UUID逐字符交错
 
 密钥是 APK `BuildConfig` 里的**静态常量**（非服务端协商），因此一次逆向、永久复刻，无需真机签名代理。50/50 抓包对拍验证通过。
 
-## 使用
+## 服务器中转平台（当前入口）
 
-1. 按[国内版 OPPO 健康认证手册](OPPO健康国内版云端MCP认证手册.md)获取三件套。已验证流程从应用私有账号文件读取 `token` 和 `token-auth-id`，再通过只读云端请求获取 `ssoid`，不需要 HTTPS 中间人抓包。
-2. 写入同目录 `auth.json`（勿提交）：
+仓库已新增单用户 Web 看板、SQLite 标准化缓存、后台调度器和远程只读 MCP。服务器运行 `oppo_health.app:app`；旧 `cloud_sync`、`cloud_query`、`cloud_analyze`、`cloud_status` 不再注册为 MCP 工具。`cloud_mcp.py` 保留经真实联调验证的 OPPO curl/签名客户端，并且直接执行时启动新中转应用，不再启动旧 stdio MCP。
+
+实施架构和验收标准见[实施落地方案](docs/实施落地方案.md)。
+
+### 本机开发
+
+1. 按[国内版 OPPO 健康认证手册](OPPO健康国内版云端MCP认证手册.md)获取认证信息，并在本机准备 `auth.json`（不要提交）：
    ```json
    {"token": "ACCESS_...", "token_auth_id": "...", "ssoid": "..."}
    ```
-3. 注册 MCP (stdio)：`python3 cloud_mcp.py`
-4. 工具：
-   - `cloud_sync(metric, days)` — 云端拉取 → 本地 SQLite 缓存
-   - `cloud_query(metric, date)` — 查缓存，`date` 支持 `YYYYMMDD` 或 `YYYY-MM-DD`
-   - `cloud_analyze(days)` — 周期环比 + 异常标记
-   - `cloud_status` — 自检
+2. 安装开发依赖：
+   ```powershell
+   python -m pip install -e ".[test]"
+   ```
+3. 生成 Argon2 密码哈希：
+   ```powershell
+   python -c "from argon2 import PasswordHasher; print(PasswordHasher().hash('替换为自己的强密码'))"
+   ```
+4. 复制 `config.example.toml` 为 `config.toml`，配置 `security.password_hash`；本机开发时设置 `APP_ENV=development`、`OPPO_AUTH_FILE` 指向 `auth.json`，然后运行：
+   ```powershell
+   $env:PYTHONPATH = "src;."
+   uvicorn oppo_health.app:app --host 127.0.0.1 --port 8000
+   ```
+5. 浏览器打开 `http://127.0.0.1:8000`。第一次运行会回填最多 365 天，后续按配置默认每 10 分钟同步。没有可用 OPPO 认证时应用仍可启动，但同步状态会显示“等待 OPPO 认证”。
 
-`cloud_sync` 和 `cloud_query` 的 `metric` 参数在 MCP schema 中提供完整枚举，共 67 项：65 个独立指标和 2 个组合指标（`stress`、`physical_mental`）。`cloud_sync` 会写入本地缓存；`cloud_query`、`cloud_analyze`、`cloud_status` 标记为只读。
+### Docker Compose 部署
+
+1. 复制 `config.example.toml` 为 `deploy/config.toml`，填写真实公开 HTTPS 地址；复制 `deploy/.env.example` 为 `deploy/.env` 并填写网页登录密码哈希和 OAuth issuer。
+2. 在 `deploy/secrets/auth.json` 放置 OPPO 认证 JSON；该目录和 `.env` 均被 Git 忽略。
+3. 在 `deploy` 目录执行 `docker compose up -d --build`。应用只绑定服务器回环地址 `127.0.0.1:8000`；按 `deploy/Caddyfile.example` 配置服务器反向代理和 HTTPS。
+4. 验证 `/healthz`、`/readyz`、网页登录以及 `/mcp/` OAuth 授权。远程 MCP 只提供 `get_health_overview`、`query_health_data`、`list_health_metrics`、`get_sync_status` 四个只读工具；手动补同步只能通过已登录网页发起。
+
+本仓库提交不包含真实服务器凭据、域名、证书或健康数据。本次仅完成软件和部署样例，未连接 `172.245.39.168`、未部署、未做真实账号上游联调。
 
 `wrist_temperature` 返回腕部温度统计。数值表示相对个人基线的变化，不是体温计测得的绝对体温。
 

@@ -1,16 +1,8 @@
 #!/usr/bin/env python3
-"""OPPO 健康云同步数据 MCP server — 独立完整，不依赖 hook/sink/手机。
+"""OPPO 健康云客户端与服务器中转应用的启动入口。
 
-用法:
-1. 抓包一次获得以下值, 写入同目录 auth.json:
-   {
-     "token": "ACCESS_....",            # accountsdk token (抓包 token 头)
-     "token_auth_id": "Fcpm...==",      # token-auth-id 头 (= usercenter.db deviceId)
-     "ssoid": "<your_virtual_ssoid>"     # virtual-ssoid (userTagId)
-   }
-   token 过期后重抓一次即可。签名密钥内嵌, 无需其他配置。
-2. 注册 MCP (stdio): <python> cloud_mcp.py
-3. 工具: cloud_sync(拉明细并写缓存), cloud_query(查缓存), cloud_analyze(周期分析), cloud_status(自检)
+云端签名/curl 实现供 oppo_health 后台同步器调用；直接运行本文件会启动
+FastAPI 看板和经过 OAuth 保护的只读远程 MCP。部署配置见 README.md。
 """
 import base64, datetime, hashlib, hmac, json, os, sqlite3, struct, time, urllib.request, urllib.error
 from typing import Literal
@@ -830,15 +822,6 @@ def cloud_status() -> dict:
     return {"auth_ready": ok, "cache": stats,
             "note": "auth.json 需含 token/token_auth_id/ssoid (抓包一次获取)"}
 
-def register_tools(server):
-    """Register MCP tools with accurate read/write annotations."""
-    from mcp.types import ToolAnnotations
-
-    server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))(cloud_sync)
-    server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False))(cloud_query)
-    server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False))(cloud_analyze)
-    server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False))(cloud_status)
-
 if __name__ == "__main__":
     # 自检: 签名对拍
     samples_path = os.path.join(HERE, "sign_samples.json")
@@ -852,7 +835,10 @@ if __name__ == "__main__":
         print(f"签名自检: {ok}/{len(samples)}", file=__import__('sys').stderr)
         assert ok == len(samples)
 
-    from mcp.server.fastmcp import FastMCP
-    mcp = FastMCP("oppo_health_cloud")
-    register_tools(mcp)
-    mcp.run()
+    import sys
+    sys.path.insert(0, os.path.join(HERE, "src"))
+    # Reuse this module as the relay's legacy cloud client instead of importing
+    # a second copy with a separate cache path or request-pacer wrapper.
+    sys.modules.setdefault("cloud_mcp", sys.modules[__name__])
+    import uvicorn
+    uvicorn.run("oppo_health.app:app", host=os.getenv("HOST", "0.0.0.0"), port=int(os.getenv("PORT", "8000")), workers=1)
