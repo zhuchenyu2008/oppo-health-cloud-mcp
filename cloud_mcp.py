@@ -10,9 +10,10 @@
    }
    token 过期后重抓一次即可。签名密钥内嵌, 无需其他配置。
 2. 注册 MCP (stdio): <python> cloud_mcp.py
-3. 工具: cloud_sync(拉明细), cloud_query(查本地缓存), cloud_status(自检)
+3. 工具: cloud_sync(拉明细并写缓存), cloud_query(查缓存), cloud_analyze(周期分析), cloud_status(自检)
 """
 import base64, datetime, hashlib, hmac, json, os, sqlite3, struct, time, urllib.request, urllib.error
+from typing import Literal
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 AUTH_FILE = os.path.join(HERE, "auth.json")
@@ -98,6 +99,9 @@ METRIC_DATASETS = {
     "physical_mental": ("physical_mental_detail", "physical_mental_stat",
                         "physical_mental_achievement"),
 }
+
+MCP_METRIC_CHOICES = tuple(ENDPOINTS) + tuple(METRIC_DATASETS)
+MetricName = Literal.__getitem__(MCP_METRIC_CHOICES)
 
 VERSIONED_DETAILS = {
     "hrv": "v2/c2s/health/heartRateVar/queryHeartRateVarDetailVersion",
@@ -516,7 +520,7 @@ def _embedded_metric_items(metric, outer_items):
             result.append(row)
     return result
 
-def cloud_sync(metric: str, days: int = 7) -> dict:
+def cloud_sync(metric: MetricName, days: int = 7) -> dict:
     """从云端拉取指定指标, 写入本地缓存.
     pull端点限制单次范围≤1天(23103), 内部按天循环.
     sleep: version游标全量(单条1请求, 仅增量ts); app_usage: date+queryFlag; weight: userTagId+pageSize."""
@@ -702,7 +706,7 @@ def cloud_sync(metric: str, days: int = 7) -> dict:
     return {"metric": metric, "endpoint": ep, "rows_cached": n,
             "raw_sample": items[:2]}
 
-def cloud_query(metric: str, date: str = None) -> dict:
+def cloud_query(metric: MetricName, date: str = None) -> dict:
     """查询本地缓存 (先 sync 再 query). date=YYYYMMDD 可选."""
     if metric in METRIC_DATASETS:
         datasets = {name: cloud_query(name, date)
@@ -826,6 +830,15 @@ def cloud_status() -> dict:
     return {"auth_ready": ok, "cache": stats,
             "note": "auth.json 需含 token/token_auth_id/ssoid (抓包一次获取)"}
 
+def register_tools(server):
+    """Register MCP tools with accurate read/write annotations."""
+    from mcp.types import ToolAnnotations
+
+    server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))(cloud_sync)
+    server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False))(cloud_query)
+    server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False))(cloud_analyze)
+    server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False))(cloud_status)
+
 if __name__ == "__main__":
     # 自检: 签名对拍
     samples_path = os.path.join(HERE, "sign_samples.json")
@@ -841,8 +854,5 @@ if __name__ == "__main__":
 
     from mcp.server.fastmcp import FastMCP
     mcp = FastMCP("oppo_health_cloud")
-    mcp.tool()(cloud_sync)
-    mcp.tool()(cloud_query)
-    mcp.tool()(cloud_analyze)
-    mcp.tool()(cloud_status)
+    register_tools(mcp)
     mcp.run()

@@ -30,6 +30,8 @@ httpSecret = XXTEA解密(BuildConfig.httpSecret常量, 两个UUID逐字符交错
    - `cloud_analyze(days)` — 周期环比 + 异常标记
    - `cloud_status` — 自检
 
+`cloud_sync` 和 `cloud_query` 的 `metric` 参数在 MCP schema 中提供完整枚举，共 67 项：65 个独立指标和 2 个组合指标（`stress`、`physical_mental`）。`cloud_sync` 会写入本地缓存；`cloud_query`、`cloud_analyze`、`cloud_status` 标记为只读。
+
 `wrist_temperature` 返回腕部温度统计。数值表示相对个人基线的变化，不是体温计测得的绝对体温。
 
 ### 新增健康指标
@@ -79,7 +81,7 @@ httpSecret = XXTEA解密(BuildConfig.httpSecret常量, 两个UUID逐字符交错
 
 APK 还声明了健康档案、健康指标、疾病风险和复诊计划接口，但这些接口使用 `aihealth-api-cn.heytapmobi.com` 独立域名及 AES-GCM 会话密钥；当前 MCP 的 sport-health 明文传输层尚未接入这套密钥交换，因此不把它们注册为可用 metric。
 
-2026-10-20 的 MCP 实测中，新增接口有记录的指标包括血氧明细（326 条）、血氧原始记录（5 条）、房颤（788 条）、久坐（5 条）、睡眠心率统计（1 条）、颈椎统计（1 条）、日照（7 条）、日照统计（1 条）和鼾声/OSA 相关记录。测试结果只保留条数与日期摘要，没有输出健康数值。
+截至 2026-10-20，已对多个新增接口完成真实账号联调；具体返回取决于账号、设备和历史数据。本文不包含个人健康记录数量或读数。
 
 `sport_file` 对应云端加密运动文件，需要应用运行时生成的 `encryptKeyEnc`。当前 MCP 尚未生成该运行时密钥，因此调用会返回 `encrypt_key_enc_required`，不会把版本索引误当成运动轨迹数据。
 
