@@ -65,15 +65,15 @@ def build_mcp(repository, settings):
         annotations=read_only,
     )
     def query_health_data(
-        metric_key: str | None = None,
         category: str | None = None,
+        metrics: list[str] | None = None,
         start_date: str | None = None,
         end_date: str | None = None,
         page_size: int = 100,
         cursor: str | None = None,
     ) -> dict:
         return repository.query_records(
-            metric_key=metric_key,
+            metrics=metrics,
             category=category,
             start_date=start_date,
             end_date=end_date,

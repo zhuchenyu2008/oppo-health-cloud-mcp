@@ -10,6 +10,15 @@ def test_mcp_has_only_read_only_tools(settings, fake_legacy):
         "get_health_overview", "query_health_data", "list_health_metrics", "get_sync_status"
     }
     assert all(tool.annotations.readOnlyHint is True for tool in tools)
+    query_tool = next(tool for tool in tools if tool.name == "query_health_data")
+    assert "metrics" in query_tool.inputSchema["properties"]
+    assert "metric_key" not in query_tool.inputSchema["properties"]
     result = asyncio.run(app.state.mcp.call_tool("list_health_metrics", {"category": "body"}))
     assert result
+    query_result = asyncio.run(app.state.mcp.call_tool("query_health_data", {
+        "metrics": ["steps", "heart_rate"],
+        "start_date": "2026-10-01",
+        "end_date": "2026-10-22",
+    }))
+    assert query_result
     assert fake_legacy.calls == []
