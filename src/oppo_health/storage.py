@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Iterable
 from zoneinfo import ZoneInfo
 
-from .catalog import COMPOSITES, Metric, category_names
+from .catalog import COMPOSITES, KIND_LABELS, Metric, category_names
 
 BEIJING = ZoneInfo("Asia/Shanghai")
 
@@ -205,23 +205,26 @@ def _record_time(payload: dict[str, Any], legacy: Any | None = None) -> tuple[st
 
 
 def _flatten(metric_key: str, payload: dict[str, Any]) -> list[dict[str, Any]]:
-    # Breath-rate responses contain a point list. Other complex payloads intentionally
-    # remain one structured event rather than being forced into a fake scalar.
-    if metric_key == "breath_rate" and isinstance(payload.get("dataList"), list):
+    # These endpoints wrap actual samples in dataList. Split known point-series into
+    # individual rows while carrying their parent interval/context forward. Never
+    # coerce a multi-field point into one arbitrarily chosen scalar.
+    if metric_key in {"breath_rate", "physical_mental_detail"} and isinstance(payload.get("dataList"), list):
+        # Keep the parent context, but let a point timestamp win over the parent
+        # calendar date so chart points retain their actual time within the interval.
+        parent = {key: value for key, value in payload.items() if key not in {"dataList", "date"}}
         rows: list[dict[str, Any]] = []
         for point in payload["dataList"]:
             if not isinstance(point, dict):
                 continue
-            rows.append({
-                **point,
-                "startTimestamp": point.get("startTimestamp", payload.get("startTimestamp")),
-                "endTimestamp": point.get("endTimestamp", payload.get("endTimestamp")),
-                "sourceType": "breath_rate.dataList",
-            })
+            row = {**parent, **point}
+            row["startTimestamp"] = point.get("startTimestamp", payload.get("startTimestamp"))
+            row["endTimestamp"] = point.get("endTimestamp", payload.get("endTimestamp"))
+            if not any(row.get(key) is not None for key in ("dataCreatedTimestamp", "startTimestamp", "measurementTime", "timestamp")):
+                row.setdefault("date", payload.get("date"))
+            row.setdefault("sourceType", f"{metric_key}.dataList")
+            rows.append(row)
         return rows or [payload]
     return [payload]
-
-
 def _normalize(metric: Metric, source_key: str, payload: dict[str, Any], synced_at: str, legacy: Any | None) -> list[tuple[Any, ...]]:
     rows: list[tuple[Any, ...]] = []
     flattened = _flatten(metric.key, payload)
@@ -441,22 +444,29 @@ class Repository:
         finally:
             con.close()
 
-    @staticmethod
-    def _public_row(row: sqlite3.Row) -> dict[str, Any]:
+    def _public_row(self, row: sqlite3.Row) -> dict[str, Any]:
+        metric = self.catalog.get(row["metric_key"])
+        # Use catalog metadata for the label as well as the persisted kind. This keeps
+        # records created before a catalog refinement understandable in the UI.
+        display_kind = metric.kind if metric else row["record_kind"]
+        attributes = _safe_json(row["attributes_json"])
         return {
             "record_id": row["record_id"],
             "metric_key": row["metric_key"],
+            "display_name": metric.name if metric else row["metric_key"],
             "category": row["category"],
             "record_kind": row["record_kind"],
+            "record_kind_label": KIND_LABELS.get(display_kind, display_kind),
             "recorded_at": row["event_time"],
             "local_date": row["local_date"],
             "value": row["value_num"],
             "unit": row["unit"],
-            "attributes": _safe_json(row["attributes_json"]),
+            "attributes": attributes,
+            "attribute_count": len(attributes) if isinstance(attributes, dict) else 0,
+            "structured": row["value_num"] is None,
             "source": {"dataset": row["metric_key"], "source_type": "oppo_cloud", "source_key": row["source_key"]},
             "synced_at": row["synced_at"],
         }
-
     def overview(self, days: int = 7) -> dict[str, Any]:
         if not 1 <= days <= 365:
             raise ValueError("INVALID_ARGUMENT")

@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#143c31">
   <title>OPPO 健康云中转</title>
-  <link rel="stylesheet" href="/static/styles.css">
-  <script src="/static/app.js" defer></script>
+  <link rel="stylesheet" href="/static/styles.css?v=3">
+  <script src="/static/app.js?v=3" defer></script>
 </head>
 <body>
   <section id="login-view" class="auth-shell">
@@ -61,9 +61,18 @@
           <div id="metric-list" class="metric-list"><div class="loading-line">正在加载目录…</div></div>
         </aside>
         <section class="detail-area">
-          <div class="detail-head"><div><p class="eyebrow">SELECTED METRIC</p><h2 id="selected-name">请选择一个指标</h2><p id="selected-meta" class="muted">从左侧目录选择指标查看趋势和明细。</p></div><span id="selected-status" class="status-badge">—</span></div>
-          <div class="chart-panel"><div class="panel-title"><span>趋势</span><span id="chart-caption" class="muted">数值记录按北京时间排列</span></div><canvas id="trend-chart" width="960" height="300" aria-label="指标趋势图"></canvas><div id="chart-empty" class="empty-state is-hidden">当前指标没有可绘制的数值记录，结构化字段见下方明细。</div></div>
-          <div class="table-panel"><div class="panel-title"><span>明细记录</span><span id="record-count" class="muted">—</span></div><div class="table-wrap"><table><thead><tr><th>日期</th><th>指标</th><th>数值</th><th>记录类型</th><th>属性摘要</th></tr></thead><tbody id="record-body"><tr><td colspan="5" class="empty-cell">请选择指标</td></tr></tbody></table></div></div>
+          <div class="detail-head"><div><p class="eyebrow">SELECTED METRIC</p><h2 id="selected-name">请选择一个指标</h2><p id="selected-meta" class="muted">从左侧目录选择指标查看趋势和明细。</p><p id="selected-description" class="metric-description"></p></div><span id="selected-status" class="status-badge">—</span></div>
+          <div class="chart-panel">
+            <div class="panel-title chart-title"><div><span>趋势</span><span id="chart-caption" class="muted">数值记录按北京时间排列</span></div><label id="chart-field-wrap" class="chart-field-label is-hidden">绘图字段<select id="chart-field" aria-label="选择趋势图绘图字段"></select></label></div>
+            <div class="chart-stage"><canvas id="trend-chart" width="960" height="300" tabindex="0" aria-label="指标趋势图；点击数据点查看精确值"></canvas><div id="chart-tooltip" class="chart-tooltip is-hidden" role="status"></div></div>
+            <div id="chart-empty" class="empty-state is-hidden">当前字段没有数值记录；多字段数据可在上方选择绘图字段，完整内容见下方明细。</div>
+            <div id="chart-point-detail" class="chart-point-detail" aria-live="polite">点击图中的点，可查看该条记录的精确数值和完整字段。</div>
+          </div>
+          <div class="table-panel">
+            <div class="panel-title"><span>明细记录</span><span id="record-count" class="muted">—</span></div>
+            <div class="table-wrap"><table><thead><tr><th>日期</th><th>指标</th><th>数值 / 记录</th><th>类型</th><th>字段摘要</th><th>详情</th></tr></thead><tbody id="record-body"><tr><td colspan="6" class="empty-cell">请选择指标</td></tr></tbody></table></div>
+            <button id="load-more-button" class="secondary-button load-more-button is-hidden" type="button">加载更早记录</button>
+          </div>
         </section>
       </section>
 
