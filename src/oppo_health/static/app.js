@@ -70,9 +70,21 @@ function formatValue(record) {
   return `${formatNumber(record.value)}${record.unit ? ` ${record.unit}` : ""}`;
 }
 
-function fieldLabel(key) {
+const PHYSICAL_MENTAL_METRICS = new Set(["physical_mental_detail", "physical_mental_stat", "physical_mental_achievement"]);
+const PHYSICAL_MENTAL_VALUE_FIELDS = new Set(["stressValue", "stress", "score"]);
+
+function fieldLabel(key, metricKey = "") {
+  if (PHYSICAL_MENTAL_METRICS.has(metricKey) && PHYSICAL_MENTAL_VALUE_FIELDS.has(key)) return "身心健康值";
   if (FIELD_LABELS[key]) return FIELD_LABELS[key];
   return String(key).replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/[_-]+/g, " ").replace(/^./, (letter) => letter.toUpperCase());
+}
+
+function metricContextDescription(metric) {
+  const context = metric?.value_context;
+  if (!context) return "";
+  const levels = (context.levels || []).map((level) => `${level.min}-${level.max}：${level.label}`).join("、");
+  const definition = context.official_definition ? `${context.official_definition} ` : "";
+  return ` ${definition}${context.interpretation || ""}${levels ? ` 官方分级：${levels}。` : ""}`;
 }
 
 function attributeEntries(attributes) {
@@ -86,15 +98,15 @@ function displayAttributeValue(value) {
   return String(value);
 }
 
-function renderAttributeList(attributes) {
+function renderAttributeList(attributes, metricKey = "") {
   const entries = attributeEntries(attributes);
   if (!entries.length) return `<p class="no-attributes">源端没有返回可展开的字段。</p>`;
   return `<dl class="attribute-list">${entries.map(([key, value]) => `
-    <div class="attribute-entry"><dt>${escapeHtml(fieldLabel(key))}<code>${escapeHtml(key)}</code></dt>
+    <div class="attribute-entry"><dt>${escapeHtml(fieldLabel(key, metricKey))}<code>${escapeHtml(key)}</code></dt>
       <dd>${typeof value === "object" && value !== null ? `<pre>${escapeHtml(displayAttributeValue(value))}</pre>` : escapeHtml(displayAttributeValue(value))}</dd></div>`).join("")}</dl>`;
 }
 
-function attributeSummary(attributes) {
+function attributeSummary(attributes, metricKey = "") {
   const all = attributeEntries(attributes);
   const useful = all.filter(([key]) => !TECHNICAL_FIELD.test(key));
   const entries = (useful.length ? useful : all).slice(0, 3);
@@ -102,7 +114,7 @@ function attributeSummary(attributes) {
   return entries.map(([key, value]) => {
     const raw = typeof value === "object" && value !== null ? "复合内容" : displayAttributeValue(value);
     const text = raw.length > 72 ? `${raw.slice(0, 69)}…` : raw;
-    return `${fieldLabel(key)}：${text}`;
+    return `${fieldLabel(key, metricKey)}：${text}`;
   }).join(" · ");
 }
 
@@ -261,7 +273,8 @@ async function selectMetric(key) {
   $("#selected-name").textContent = metric.name;
   $("#selected-meta").textContent = `${metric.category_name || metric.category} · ${metric.kind_label || metric.kind} · ${metric.unit || "字段单位以源端为准"}`;
   const fieldHints = metric.field_hints?.length ? ` 常见字段线索（以实际返回为准）：${metric.field_hints.join("、")}。` : "";
-  $("#selected-description").textContent = `${metric.description || metric.kind_explanation || "源端字段原样保留；展开每条记录查看完整结构。"}${fieldHints}`;
+  const contextDescription = metricContextDescription(metric);
+  $("#selected-description").textContent = `${metric.description || metric.kind_explanation || "源端字段原样保留；展开每条记录查看完整结构。"}${fieldHints}${contextDescription}`;
   const badge = $("#selected-status");
   badge.textContent = metric.available ? statusText(status?.status || "queued") : "未接入";
   badge.className = `status-badge ${status?.status || ""}`;
@@ -342,8 +355,8 @@ function renderRecords() {
       <td>${escapeHtml(metricNames[record.metric_key] || record.display_name || record.metric_key)}</td>
       <td>${escapeHtml(formatValue(record))}</td>
       <td><span class="record-kind">${escapeHtml(kind)}</span></td>
-      <td>${escapeHtml(attributeSummary(attrs))}</td>
-      <td><details class="record-details"><summary>查看 ${entries.length || "源端"} 项字段</summary>${renderAttributeList(attrs)}</details></td>
+      <td>${escapeHtml(attributeSummary(attrs, record.metric_key))}</td>
+      <td><details class="record-details"><summary>查看 ${entries.length || "源端"} 项字段</summary>${renderAttributeList(attrs, record.metric_key)}</details></td>
     </tr>`;
   }).join("");
 }
@@ -372,8 +385,8 @@ function getPathValue(record, path) {
   return path.split(".").reduce((value, key) => value && typeof value === "object" ? value[key] : undefined, record.attributes);
 }
 
-function pathLabel(path) {
-  return path.split(".").map((key) => fieldLabel(key)).join(" / ");
+function pathLabel(path, metricKey = "") {
+  return path.split(".").map((key) => fieldLabel(key, metricKey)).join(" / ");
 }
 
 function configureChartFields(records) {
@@ -390,7 +403,7 @@ function configureChartFields(records) {
     }
     flattenNumericFields(record.attributes).forEach((count, path) => {
       const key = `${prefix}${path}`;
-      const label = composite ? `${sourceName} · ${pathLabel(path)}` : pathLabel(path);
+      const label = composite ? `${sourceName} · ${pathLabel(path, record.metric_key)}` : pathLabel(path, record.metric_key);
       options.set(key, { label, count: (options.get(key)?.count || 0) + 1 });
     });
   });
@@ -531,7 +544,7 @@ function selectChartPoint(point) {
   const dateText = record.local_date || formatDate(record.recorded_at);
   const unit = chartUsesStandardValue() ? record.unit : "";
   const value = `${formatNumber(point.value)}${unit ? ` ${unit}` : ""}`;
-  $("#chart-point-detail").innerHTML = `<div class="point-reading"><span>${escapeHtml(dateText)} · ${escapeHtml(point.label)}</span><strong>${escapeHtml(value)}</strong><small>${escapeHtml(record.record_kind_label || "源端记录")}</small></div>${renderAttributeList(record.attributes || {})}`;
+  $("#chart-point-detail").innerHTML = `<div class="point-reading"><span>${escapeHtml(dateText)} · ${escapeHtml(point.label)}</span><strong>${escapeHtml(value)}</strong><small>${escapeHtml(record.record_kind_label || "源端记录")}</small></div>${renderAttributeList(record.attributes || {}, record.metric_key)}`;
 }
 
 function renderSync(sync) {

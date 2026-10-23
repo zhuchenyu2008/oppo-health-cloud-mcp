@@ -1,7 +1,9 @@
 """Human-readable metadata for every existing OPPO health dataset."""
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import asdict, dataclass
+from typing import Any
 
 
 KIND_LABELS: dict[str, str] = {
@@ -35,6 +37,48 @@ DATA_SHAPES: dict[str, str] = {
 }
 
 
+PHYSICAL_MENTAL_FIELD_INTERPRETATION = (
+    "该字段在身心健康指标中表示身心健康值，不是心理压力强度；"
+    "数值越高表示身心状态越好，数值越低表示需要适当放松。"
+)
+
+PHYSICAL_MENTAL_VALUE_CONTEXT: dict[str, Any] = {
+    "display_name": "身心健康值",
+    "value_direction": "higher_is_better",
+    "scale": {"min": 1, "max": 100},
+    "official_definition": (
+        "身心状态基于心率变异性(HRV)、静息心率和活动强度来综合评估身体疲劳程度和心理情绪状态，"
+        "能够帮助你及时了解自身状态，应对工作生活中的挑战。"
+    ),
+    "interpretation": PHYSICAL_MENTAL_FIELD_INTERPRETATION,
+    "levels": [
+        {"min": 76, "max": 100, "label": "状态优秀"},
+        {"min": 51, "max": 75, "label": "状态不错"},
+        {"min": 26, "max": 50, "label": "状态正常"},
+        {"min": 1, "max": 25, "label": "适当放松"},
+    ],
+    "notes": [
+        "身心状态基于生理指标变化推测，与用户感知的心理情绪状态不一定完全相符。",
+        "身心状态的短期波动是正常现象，建议关注长期趋势；如果对波动有疑问，可以参考健康APP内的全天HRV数值图表。",
+    ],
+    "field_semantics": {
+        field: {
+            "display_name": "身心健康值",
+            "value_direction": "higher_is_better",
+            "interpretation": PHYSICAL_MENTAL_FIELD_INTERPRETATION,
+        }
+        for field in ("stressValue", "stress", "score")
+    },
+}
+
+PHYSICAL_MENTAL_METRICS = {
+    "physical_mental_detail",
+    "physical_mental_stat",
+    "physical_mental_achievement",
+    "physical_mental",
+}
+
+
 @dataclass(frozen=True)
 class Metric:
     key: str
@@ -47,6 +91,23 @@ class Metric:
     available: bool = True
     description: str = ""
     field_hints: tuple[str, ...] = ()
+    value_context: dict[str, Any] | None = None
+
+    def value_context_for_field(self, field: str) -> dict[str, Any] | None:
+        """Return field-scoped semantics without exposing unrelated metric fields."""
+        if not self.value_context:
+            return None
+        semantics = self.value_context.get("field_semantics", {}).get(field)
+        if not semantics:
+            return None
+        context = {
+            key: deepcopy(self.value_context[key])
+            for key in ("display_name", "value_direction", "scale", "levels", "interpretation")
+            if key in self.value_context
+        }
+        context.update(deepcopy(semantics))
+        context["field"] = field
+        return context
 
     def public(self) -> dict:
         data = asdict(self)
@@ -54,6 +115,8 @@ class Metric:
         data["kind_explanation"] = KIND_EXPLANATIONS.get(self.kind, "按源端字段保留")
         data["data_shape"] = DATA_SHAPES.get(self.kind, "结构化记录")
         data["field_hints"] = list(self.field_hints)
+        if self.value_context is None:
+            data.pop("value_context", None)
         return data
 
 
@@ -157,9 +220,9 @@ DESCRIPTIONS: dict[str, str] = {
     "vitamin": "维生素或相关健康指标记录，指标、数值和单位按源端字段保存。",
     "stress_detail": "压力明细或采样记录；压力值、HRV 等字段可能同时存在。",
     "stress_stat": "按天汇总的压力统计，与压力明细分开保存。",
-    "physical_mental_detail": "一条复合身心健康测量/训练记录，可能同时包含压力、HRV、评分和时间偏移；它不是一个单值。",
-    "physical_mental_stat": "按天汇总的身心健康统计，多个指标和状态字段保留在详情中。",
-    "physical_mental_achievement": "身心健康目标/成就快照，记录日期、目标内容和达成状态。",
+    "physical_mental_detail": "一条复合身心健康测量/训练记录，可能同时包含身心健康值、HRV、评分和时间偏移；它不是一个单值。",
+    "physical_mental_stat": "按天汇总的身心健康统计，身心健康值、状态和其他指标字段保留在详情中。",
+    "physical_mental_achievement": "身心健康目标/成就快照，记录日期、目标内容和达成状态；如含分数，按身心健康值区间解释。",
     "hearing": "一次听力测试记录，测试结果、耳别、频段或评分等字段在详情中分别显示。",
     "hearing_stat": "听力测试的统计记录，与单次听力测试分开保存。",
     "cervical_stat": "颈椎训练的日/周期汇总，例如次数、时长和完成状态。",
@@ -173,9 +236,9 @@ DESCRIPTIONS: dict[str, str] = {
 }
 
 FIELD_HINTS: dict[str, tuple[str, ...]] = {
-    "physical_mental_detail": ("stressValue 压力值", "heartRateVarValue/HRV", "startTimeOffset 时间偏移", "sourceType 来源类型"),
-    "physical_mental_stat": ("date 日期", "score/指标分数", "status 状态", "summary 汇总字段"),
-    "physical_mental_achievement": ("date 日期", "goal 目标", "achievement/达成状态"),
+    "physical_mental_detail": ("stressValue/stress 身心健康值（1-100，越高越好）", "heartRateVarValue/HRV", "startTimeOffset 时间偏移", "sourceType 来源类型"),
+    "physical_mental_stat": ("date 日期", "score 身心健康值（1-100，越高越好）", "status 状态", "summary 汇总字段"),
+    "physical_mental_achievement": ("date 日期", "score 身心健康值（1-100，越高越好）", "goal 目标", "achievement/达成状态"),
     "hearing": ("testTime 测试时间", "ear/耳别", "frequency/频段", "level/评分或分贝"),
     "hearing_stat": ("date 日期", "average/统计值", "left/right 左右耳", "status 状态"),
     "cervical_stat": ("date 日期", "duration 时长", "count 次数", "completion 完成状态"),
@@ -230,6 +293,7 @@ def build_catalog(endpoint_names: list[str] | tuple[str, ...]) -> dict[str, Metr
             available=available,
             description=DESCRIPTIONS.get(key, f"{NAMES.get(key, key)}的源端结构化记录，完整字段请打开记录详情查看。"),
             field_hints=FIELD_HINTS.get(key, ()),
+            value_context=deepcopy(PHYSICAL_MENTAL_VALUE_CONTEXT) if key in PHYSICAL_MENTAL_METRICS else None,
         )
     for key, sources in COMPOSITES.items():
         result[key] = Metric(
@@ -242,6 +306,7 @@ def build_catalog(endpoint_names: list[str] | tuple[str, ...]) -> dict[str, Metr
             "数据分组视图，不产生新的测量值",
             description=f"组合查看：{'、'.join(NAMES.get(source, source) for source in sources)}。点击具体子指标可查看原始记录详情。",
             field_hints=tuple(sources),
+            value_context=deepcopy(PHYSICAL_MENTAL_VALUE_CONTEXT) if key == "physical_mental" else None,
         )
     return result
 

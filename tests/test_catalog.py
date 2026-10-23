@@ -26,3 +26,8 @@ def test_catalog_explains_structured_wellbeing_records():
     assert catalog["hearing_stat"].kind == "daily_summary"
     assert catalog["physical_mental_detail"].public()["kind_label"] == "测量 / 采样"
     assert catalog["physical_mental_detail"].public()["field_hints"]
+    context = catalog["physical_mental_detail"].public()["value_context"]
+    assert context["value_direction"] == "higher_is_better"
+    assert context["levels"][0] == {"min": 76, "max": 100, "label": "状态优秀"}
+    assert context["field_semantics"]["stress"]["display_name"] == "身心健康值"
+    assert "value_context" not in catalog["stress_detail"].public()

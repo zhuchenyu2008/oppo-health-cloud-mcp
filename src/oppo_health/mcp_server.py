@@ -61,7 +61,7 @@ def build_mcp(repository, settings):
 
     @mcp.tool(
         name="query_health_data",
-        description="按指标、类别和北京时间日期范围分页读取标准化健康记录。复杂记录保留在 attributes 中。",
+        description="按指标、类别和北京时间日期范围分页读取标准化健康记录。复杂记录保留在 attributes 中；如果结果包含身心健康指标，响应会附带该指标的字段级官方语义和分级。",
         annotations=read_only,
     )
     def query_health_data(
@@ -83,7 +83,7 @@ def build_mcp(repository, settings):
 
     @mcp.tool(
         name="list_health_metrics",
-        description="读取健康指标目录，包含中文名、类别、单位、时间语义、数据类型和接入注意事项。",
+        description="读取健康指标目录，包含中文名、类别、单位、时间语义、数据类型、接入注意事项，以及仅适用于相关指标的字段语义。",
         annotations=read_only,
     )
     def list_health_metrics(category: str | None = None) -> dict:

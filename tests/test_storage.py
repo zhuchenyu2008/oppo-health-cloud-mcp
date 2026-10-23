@@ -68,6 +68,11 @@ def test_structured_records_keep_full_fields_and_chinese_kind_label(fake_legacy,
     assert record["record_kind_label"] == "测量 / 采样"
     assert record["display_name"] == "身心健康明细"
     assert record["attributes"]["hrv"] == {"rmssd": 31.5, "sdnn": 48}
+    assert record["value_context"]["field"] == "stressValue"
+    assert record["value_context"]["value_direction"] == "higher_is_better"
+    assert record["value_context"]["level"] == "状态正常"
+    result = repo.query_records(metric_key="physical_mental_detail")
+    assert result["metric_context"]["physical_mental_detail"]["value_direction"] == "higher_is_better"
 
 
 def test_physical_mental_data_list_becomes_individual_chartable_rows(fake_legacy, tmp_path):
@@ -96,5 +101,7 @@ def test_physical_mental_data_list_becomes_individual_chartable_rows(fake_legacy
     assert records[0]["recorded_at"] is not None
     assert records[0]["attributes"]["startTimeOffset"] == 120
     assert records[0]["attributes"]["stress"] == 42
+    assert records[0]["value_context"]["field"] == "stress"
+    assert records[0]["value_context"]["level"] == "状态正常"
     assert records[1]["attributes"]["hrv"] == 31.5
     assert "dataList" not in records[0]["attributes"]

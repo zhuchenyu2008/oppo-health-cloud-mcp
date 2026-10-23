@@ -5,6 +5,7 @@ import base64
 import hashlib
 import json
 import sqlite3
+from copy import deepcopy
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable
@@ -258,6 +259,49 @@ def _normalize(metric: Metric, source_key: str, payload: dict[str, Any], synced_
     return rows
 
 
+def _as_number(value: Any) -> float | None:
+    if isinstance(value, bool) or value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value.strip())
+        except (TypeError, ValueError):
+            return None
+    return None
+
+
+def _record_value_context(metric: Metric | None, attributes: Any) -> dict[str, Any] | None:
+    if metric is None or not metric.value_context or not isinstance(attributes, dict):
+        return None
+    for field in metric.value_context.get("field_semantics", {}):
+        if field not in attributes:
+            continue
+        numeric = _as_number(attributes[field])
+        if numeric is None:
+            continue
+        context = metric.value_context_for_field(field)
+        if context is None:
+            continue
+        for level in context.get("levels", []):
+            if level["min"] <= numeric <= level["max"]:
+                context["level"] = level["label"]
+                break
+        return context
+    return None
+
+
+def _public_metric_context(metric: Metric | None) -> dict[str, Any] | None:
+    if metric is None or not metric.value_context:
+        return None
+    return {
+        "metric_key": metric.key,
+        "name": metric.name,
+        **deepcopy(metric.value_context),
+    }
+
+
 class Repository:
     """Normalized database plus a read-through view of the legacy raw cache."""
 
@@ -436,10 +480,12 @@ class Repository:
             ).fetchall()
             has_more = len(rows) > page_size
             visible = rows[:page_size]
+            context_keys = [*keys, *(row["metric_key"] for row in visible)]
             return {
                 "records": [self._public_row(row) for row in visible],
                 "has_more": has_more,
                 "next_cursor": self._encode_cursor(visible[-1]["local_date"] or "", visible[-1]["record_id"]) if has_more and visible else None,
+                "metric_context": self.metric_contexts(context_keys),
             }
         finally:
             con.close()
@@ -450,7 +496,7 @@ class Repository:
         # records created before a catalog refinement understandable in the UI.
         display_kind = metric.kind if metric else row["record_kind"]
         attributes = _safe_json(row["attributes_json"])
-        return {
+        result = {
             "record_id": row["record_id"],
             "metric_key": row["metric_key"],
             "display_name": metric.name if metric else row["metric_key"],
@@ -467,6 +513,11 @@ class Repository:
             "source": {"dataset": row["metric_key"], "source_type": "oppo_cloud", "source_key": row["source_key"]},
             "synced_at": row["synced_at"],
         }
+        value_context = _record_value_context(metric, attributes)
+        if value_context is not None:
+            result["value_context"] = value_context
+        return result
+
     def overview(self, days: int = 7) -> dict[str, Any]:
         if not 1 <= days <= 365:
             raise ValueError("INVALID_ARGUMENT")
@@ -502,7 +553,7 @@ class Repository:
                     ).fetchone()
                     if latest:
                         public = self._public_row(latest)
-                        summaries.append({
+                        summary = {
                             "metric_key": metric.key,
                             "name": metric.name,
                             "category": metric.category,
@@ -514,7 +565,10 @@ class Repository:
                             "record_count": int(row["record_count"]),
                             "days_covered": int(row["days_covered"]),
                             "synced_at": public["synced_at"],
-                        })
+                        }
+                        if public.get("value_context") is not None:
+                            summary["value_context"] = public["value_context"]
+                        summaries.append(summary)
             total = int(con.execute("SELECT COUNT(*) FROM health_records WHERE local_date>=? AND local_date<=?", (start_text, end_text)).fetchone()[0])
         finally:
             con.close()
@@ -522,9 +576,18 @@ class Repository:
             "period": {"days": days, "start_date": start_text, "end_date": end_text, "timezone": "Asia/Shanghai"},
             "summaries": sorted(summaries, key=lambda item: (item["category"], item["metric_key"])),
             "coverage": coverage,
+            "metric_context": self.metric_contexts(coverage.keys()),
             "records_in_window": total,
             "sync": self.sync_status(),
         }
+
+    def metric_contexts(self, keys: Iterable[str]) -> dict[str, dict[str, Any]]:
+        contexts: dict[str, dict[str, Any]] = {}
+        for key in dict.fromkeys(keys):
+            context = _public_metric_context(self.catalog.get(key))
+            if context is not None:
+                contexts[key] = context
+        return contexts
 
     def catalog_rows(self, category: str | None = None) -> list[dict[str, Any]]:
         if category and category not in category_names():
