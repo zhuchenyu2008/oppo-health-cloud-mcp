@@ -39,7 +39,9 @@ def build_mcp(repository, settings):
         name="OPPO 健康缓存",
         instructions=(
             "这是服务器端 OPPO 健康数据缓存的只读 MCP。所有工具只读取标准化缓存，"
-            "不会触发云端同步、修改记录或提供医疗诊断。数据日期使用北京时间。"
+            "不会触发云端同步、修改记录或提供医疗诊断。压力明细和压力统计已排除；"
+            "身心健康字段中的 stress/stressValue 是 1-100 的身心健康值，数值越高表示状态越好。"
+            "数据日期使用北京时间。"
         ),
         auth_server_provider=provider,
         auth=auth,
@@ -61,7 +63,7 @@ def build_mcp(repository, settings):
 
     @mcp.tool(
         name="query_health_data",
-        description="按指标、类别和北京时间日期范围分页读取标准化健康记录。复杂记录保留在 attributes 中；如果结果包含身心健康指标，响应会附带该指标的字段级官方语义和分级。",
+        description="按指标、类别和北京时间日期范围分页读取标准化健康记录。压力数据不在可查询目录中；身心健康记录中的 stress/stressValue 按 1-100 身心健康值解释，数值越高越好。复杂记录保留在 attributes 中，并附带字段级官方语义和分级。",
         annotations=read_only,
     )
     def query_health_data(
@@ -83,7 +85,7 @@ def build_mcp(repository, settings):
 
     @mcp.tool(
         name="list_health_metrics",
-        description="读取健康指标目录，包含中文名、类别、单位、时间语义、数据类型、接入注意事项，以及仅适用于相关指标的字段语义。",
+        description="读取健康指标目录，包含中文名、类别、单位、时间语义、数据类型、接入注意事项，以及仅适用于相关指标的字段语义。压力指标已从目录移除；身心健康值按官方分级解释。",
         annotations=read_only,
     )
     def list_health_metrics(category: str | None = None) -> dict:

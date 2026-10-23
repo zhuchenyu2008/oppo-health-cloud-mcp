@@ -5,13 +5,16 @@ from oppo_health.catalog import GROUPS, build_catalog, category_names
 
 def test_catalog_covers_all_mcp_choices():
     catalog = build_catalog(cloud_mcp.MCP_METRIC_CHOICES)
-    assert len(catalog) == 67
+    assert len(catalog) == 64
     assert set(catalog) == set(cloud_mcp.MCP_METRIC_CHOICES)
     assert catalog["steps"].name == "步数记录"
     assert catalog["steps"].unit == "步"
     assert catalog["sport_file"].available is False
     assert "encryptKeyEnc" in catalog["sport_file"].caveat
-    assert catalog["stress"].kind == "composite"
+    assert "stress_detail" not in catalog
+    assert "stress_stat" not in catalog
+    assert "stress" not in catalog
+    assert catalog["physical_mental"].kind == "composite"
     assert set(GROUPS) == {"activity", "sleep", "cardiovascular", "body", "wellbeing", "cycle_environment"}
     assert category_names()["cardiovascular"] == "心血管"
 
@@ -30,4 +33,3 @@ def test_catalog_explains_structured_wellbeing_records():
     assert context["value_direction"] == "higher_is_better"
     assert context["levels"][0] == {"min": 76, "max": 100, "label": "状态优秀"}
     assert context["field_semantics"]["stress"]["display_name"] == "身心健康值"
-    assert "value_context" not in catalog["stress_detail"].public()

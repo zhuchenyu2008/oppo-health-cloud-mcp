@@ -30,7 +30,9 @@ def test_web_auth_and_read_only_mcp(settings, fake_legacy):
         assert "httponly" in login.headers["set-cookie"].lower()
         assert "samesite=strict" in login.headers["set-cookie"].lower()
         assert client.get("/api/metrics").status_code == 200
-        assert len(client.get("/api/metrics").json()["metrics"]) == 67
+        metric_payload = client.get("/api/metrics").json()
+        assert len(metric_payload["metrics"]) == 64
+        assert not {"stress_detail", "stress_stat", "stress"} & {item["key"] for item in metric_payload["metrics"]}
         assert client.post("/api/sync", json={"metrics": ["steps"]}).status_code == 403
         queued = client.post("/api/sync", json={"metrics": ["steps"]}, headers={"X-CSRF-Token": csrf})
         assert queued.status_code == 202

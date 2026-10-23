@@ -28,7 +28,7 @@ const FIELD_LABELS = {
   steps: "步数", totalSteps: "总步数", distance: "距离", totalDistance: "总距离", calories: "消耗热量",
   totalCalories: "总消耗", duration: "时长", totalDuration: "总时长", heartRate: "心率", avgHeartRate: "平均心率",
   heartRateValue: "心率读数", bloodOxygen: "血氧", bloodOxygenSaturationValue: "血氧饱和度", respiratoryRate: "呼吸率",
-  breathRate: "呼吸率", stressValue: "压力值", stress: "压力值", heartRateVarValue: "心率变异性（HRV）",
+  breathRate: "呼吸率", stressValue: "身心健康值", stress: "身心健康值", heartRateVarValue: "心率变异性（HRV）",
   hrv: "心率变异性（HRV）", rmssd: "RMSSD", sdnn: "SDNN", sleepIndex: "睡眠指数", sourceType: "来源类型",
   sportMode: "运动模式", deviceId: "设备 ID", deviceSn: "设备序列号", recordId: "记录 ID", status: "状态",
   type: "类型", score: "评分", value: "数值", ear: "耳别", frequency: "频率", level: "等级 / 读数",

@@ -164,8 +164,6 @@ def _numeric_value(metric_key: str, payload: dict[str, Any]) -> float | None:
         "wrist_temperature": ("wristTemperatureValue", "temperatureValue", "value"),
         "wrist_temperature_detail": ("wristTemperatureValue", "temperatureValue", "value"),
         "hrv": ("heartRateVarValue", "hrv", "value"),
-        "stress_detail": ("stressValue", "stress", "value"),
-        "stress_stat": ("stressValue", "stress", "value"),
         "sleep_index": ("sleepIndex", "index", "value"),
         "exercise_intensity": ("intensity", "exerciseIntensity", "value"),
     }.get(metric_key, ())
@@ -361,7 +359,11 @@ class Repository:
             return {}
         try:
             con.execute(LEGACY_SCHEMA)
-            return {row["metric"]: int(row["n"]) for row in con.execute("SELECT metric, COUNT(*) AS n FROM cloud_data GROUP BY metric")}
+            return {
+                row["metric"]: int(row["n"])
+                for row in con.execute("SELECT metric, COUNT(*) AS n FROM cloud_data GROUP BY metric")
+                if row["metric"] in self.catalog
+            }
         finally:
             con.close()
 
@@ -429,17 +431,25 @@ class Repository:
     ) -> dict[str, Any]:
         if not 1 <= page_size <= 500:
             raise ValueError("INVALID_PAGE_SIZE")
-        keys: list[str] = []
+        requested_keys: list[str] = []
         if metric_key:
-            keys.extend(COMPOSITES.get(metric_key, (metric_key,)))
+            requested_keys.append(metric_key)
         if metrics:
-            for key in metrics:
-                keys.extend(COMPOSITES.get(key, (key,)))
-        if keys:
-            keys = list(dict.fromkeys(keys))
-            unknown = [key for key in keys if key not in self.catalog]
+            requested_keys.extend(metrics)
+        if requested_keys:
+            requested_keys = list(dict.fromkeys(requested_keys))
+            unknown = [key for key in requested_keys if key not in self.catalog]
             if unknown:
                 raise ValueError(f"METRIC_NOT_FOUND:{unknown[0]}")
+            keys = list(dict.fromkeys(
+                source
+                for key in requested_keys
+                for source in COMPOSITES.get(key, (key,))
+            ))
+        else:
+            # Never let an unfiltered query expose cached rows for retired or
+            # intentionally hidden datasets that are no longer in the catalog.
+            keys = [key for key in self.catalog if key not in COMPOSITES]
         for value in (start_date, end_date):
             if value:
                 try:
@@ -569,7 +579,11 @@ class Repository:
                         if public.get("value_context") is not None:
                             summary["value_context"] = public["value_context"]
                         summaries.append(summary)
-            total = int(con.execute("SELECT COUNT(*) FROM health_records WHERE local_date>=? AND local_date<=?", (start_text, end_text)).fetchone()[0])
+            total = sum(
+                int(row["record_count"])
+                for row in rows
+                if row["metric_key"] in self.catalog
+            )
         finally:
             con.close()
         return {
@@ -621,13 +635,16 @@ class Repository:
 
     def sync_status(self, metric_key: str | None = None) -> dict[str, Any]:
         self.ensure_sync_states()
-        requested = COMPOSITES.get(metric_key, (metric_key,)) if metric_key else None
+        if metric_key and metric_key not in self.catalog:
+            raise ValueError(f"METRIC_NOT_FOUND:{metric_key}")
+        requested = (
+            COMPOSITES.get(metric_key, (metric_key,))
+            if metric_key
+            else tuple(key for key in self.catalog if key not in COMPOSITES)
+        )
         con = self.connect()
         try:
-            if requested:
-                rows = con.execute(f"SELECT * FROM sync_state WHERE metric_key IN ({','.join('?' for _ in requested)}) ORDER BY metric_key", tuple(requested)).fetchall()
-            else:
-                rows = con.execute("SELECT * FROM sync_state ORDER BY metric_key").fetchall()
+            rows = con.execute(f"SELECT * FROM sync_state WHERE metric_key IN ({','.join('?' for _ in requested)}) ORDER BY metric_key", tuple(requested)).fetchall()
             metrics = []
             for row in rows:
                 metric = self.catalog.get(row["metric_key"])

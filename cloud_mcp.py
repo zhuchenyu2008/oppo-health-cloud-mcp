@@ -56,8 +56,6 @@ ENDPOINTS = {
     "weight":      ["v1/c2s/health/weight/querySignedWeight"],
     "wrist_temperature": ["v5/c2s/health/wrist/temperature/pullStatVersionPageData"],
     "hrv": ["v5/c2s/health/heartRateVar/queryHeartRateVarDetailData"],
-    "stress_detail": ["v5/c2s/health/stress/queryStressDetailData"],
-    "stress_stat": ["v5/c2s/health/stress/pullStatVersionPageData"],
     "breath_rate": ["v5/c2s/health/breathRate/queryBreathRateDetailData"],
     "physical_mental_detail": ["v5/c2s/health/physical/mental/queryPhysicalMentalHealthDetailData"],
     "physical_mental_stat": ["v5/c2s/health/physical/mental/pullStatVersionPageData"],
@@ -87,7 +85,6 @@ ENDPOINTS = {
 }
 
 METRIC_DATASETS = {
-    "stress": ("stress_detail", "stress_stat"),
     "physical_mental": ("physical_mental_detail", "physical_mental_stat",
                         "physical_mental_achievement"),
 }
@@ -102,7 +99,6 @@ VERSIONED_DETAILS = {
     "steps_detail": "v3/c2s/sport/steps/queryStepsDetailVersionList",
     "sleep_status": "v3/c2s/health/sleep/querySleepStatusVersionList",
     "sleep_rr": "v3/c2s/health/sleep/querySleepRRIntervalDetailVersion",
-    "stress_detail": "v2/c2s/health/stress/queryStressDetailVersion",
     "physical_mental_detail": "v4/c2s/health/physical/mental/queryPhysicalMentalHealthDetailVersion",
     "blood_pressure": "v1/c2s/health/bloodPressure/queryBloodPressureDetailVersion",
     "blood_sugar": "v4/c2s/health/glucose/queryGlucoseDetailVersion",
@@ -146,7 +142,6 @@ VERSIONED_STATS = {
     "heart_rate_stat": "v3/c2s/health/heartRate/queryHeartRateStatVersionList",
     "steps_stat": "v2/c2s/sport/steps/queryStepsStatVersionList",
     "sleep_stat": "v3/c2s/health/sleep/querySleepStatVersionList",
-    "stress_stat": "v2/c2s/health/stress/queryStressStatVersion",
     "physical_mental_stat": "v4/c2s/health/physical/mental/queryPhysicalMentalHealthStatVersionList",
     "physical_mental_achievement": "v4/c2s/health/physical/mental/queryPhysicalMentalHealthAchievementVersionList",
     "blood_sugar_stat": "v4/c2s/health/glucose/queryGlucoseStatVersion",
@@ -164,7 +159,7 @@ VERSIONED_SPORT = {
 }
 
 DETAIL_VERSION_FIELDS = {"steps_detail": "modifiedTime"}
-DETAIL_VERSION_QUERY_FLAGS = {"stress_detail": 1, "physical_mental_detail": 1}
+DETAIL_VERSION_QUERY_FLAGS = {"physical_mental_detail": 1}
 
 BEIJING = datetime.timezone(datetime.timedelta(hours=8), "Asia/Shanghai")
 
@@ -479,10 +474,7 @@ def _recent_items(items, days):
     return result
 
 def _embedded_metric_items(metric, outer_items):
-    source_key, value_key = {
-        "hrv": ("hrv", "heartRateVarValue"),
-        "stress_detail": ("stress", "stressValue"),
-    }[metric]
+    source_key, value_key = ("hrv", "heartRateVarValue")
     result = []
     for outer_index, outer in enumerate(outer_items):
         if not isinstance(outer, dict):
@@ -501,12 +493,7 @@ def _embedded_metric_items(metric, outer_items):
                 "startTimeOffset": point.get("startTimeOffset"),
                 "source": "physical_mental_detail",
             }
-            if metric == "stress_detail":
-                row.update({"stressState": point.get("stressState"),
-                            "stressType": point.get("type"),
-                            "display": point.get("display")})
-            else:
-                row["display"] = point.get("display")
+            row["display"] = point.get("display")
             row["__cacheKey"] = (f"{metric}:{outer.get('startTimestamp')}:"
                                   f"{outer.get('modifiedTimestamp')}:{outer_index}:{index}")
             result.append(row)
@@ -597,14 +584,6 @@ def cloud_sync(metric: MetricName, days: int = 7) -> dict:
                 items = _embedded_metric_items("hrv", source_items)
                 if items:
                     derived_from = "physical_mental_detail"
-        if metric == "stress_detail" and not items:
-            source_items, error = _fetch_versioned_details("physical_mental_detail", auth, days)
-            if error is None:
-                source_items = _recent_items(source_items, days)
-                _cache("physical_mental_detail", source_items)
-                items = _embedded_metric_items("stress_detail", source_items)
-                if items:
-                    derived_from = "physical_mental_detail"
     elif metric in VERSIONED_STATS:
         items, error = _fetch_versioned_stats(metric, auth, days)
         if error is not None:
@@ -683,7 +662,7 @@ def cloud_sync(metric: MetricName, days: int = 7) -> dict:
                         "httpError": r.get("http_error")}
     n = _cache(metric, items)
     if metric == "wrist_temperature" or metric in {
-            "hrv", "stress_detail", "stress_stat", "breath_rate",
+            "hrv", "breath_rate",
             "physical_mental_detail", "physical_mental_stat", "physical_mental_achievement",
             "blood_pressure", "blood_sugar", "atrial_fibril", "atrial_fibril_warning",
             "cardiovascular", "sedentary", "sleep_advice", "sleep_hr_stat", "hearing",

@@ -21,6 +21,7 @@ def test_mcp_has_only_read_only_tools(settings, fake_legacy):
     physical = next(item for item in wellbeing_payload["metrics"] if item["key"] == "physical_mental_detail")
     assert physical["value_context"]["value_direction"] == "higher_is_better"
     assert "个性化测量模型" not in str(physical["value_context"])
+    assert not {"stress_detail", "stress_stat", "stress"} & {item["key"] for item in wellbeing_payload["metrics"]}
     query_result = asyncio.run(app.state.mcp.call_tool("query_health_data", {
         "metrics": ["steps", "heart_rate"],
         "start_date": "2026-10-01",

@@ -125,7 +125,7 @@ GROUPS: dict[str, str] = {
     "sleep": "sleep sleep_stat sleep_status sleep_index sleep_rr sleep_advice sleep_hr_stat snore_osa_detail snore_osa_sum snore_env_noise snore_feature snore_stat sensor_osa breath_rate",
     "cardiovascular": "heart_rate heart_rate_detail heart_rate_stat heart_rate_warning blood_oxygen blood_oxygen_detail blood_oxygen_stat blood_oxygen_warning blood_oxygen_origin blood_pressure blood_pressure_stat atrial_fibril atrial_fibril_warning cardiovascular ecg hrv",
     "body": "weight weight_target wrist_temperature wrist_temperature_detail blood_sugar blood_sugar_stat blood_sugar_warning vitamin",
-    "wellbeing": "stress_detail stress_stat physical_mental_detail physical_mental_stat physical_mental_achievement hearing hearing_stat cervical_stat cervical_action insight",
+    "wellbeing": "physical_mental_detail physical_mental_stat physical_mental_achievement hearing hearing_stat cervical_stat cervical_action insight",
     "cycle_environment": "physiological_cycle physiological_symptoms ovulation sunshine sunshine_stat",
 }
 
@@ -143,11 +143,11 @@ NAMES = {
     "atrial_fibril_warning": "房颤预警", "cardiovascular": "心血管评估", "ecg": "心电图记录", "hrv": "心率变异性",
     "weight": "体重", "weight_target": "体重目标", "wrist_temperature": "腕温统计", "wrist_temperature_detail": "腕温明细",
     "blood_sugar": "血糖记录", "blood_sugar_stat": "血糖统计", "blood_sugar_warning": "血糖预警", "vitamin": "维生素记录",
-    "stress_detail": "压力明细", "stress_stat": "压力统计", "physical_mental_detail": "身心健康明细",
+    "physical_mental_detail": "身心健康明细",
     "physical_mental_stat": "身心健康统计", "physical_mental_achievement": "身心健康成就", "hearing": "听力记录",
     "hearing_stat": "听力统计", "cervical_stat": "颈椎训练统计", "cervical_action": "颈椎训练动作", "insight": "健康洞察",
     "physiological_cycle": "生理周期", "physiological_symptoms": "生理症状", "ovulation": "排卵信息",
-    "sunshine": "日照记录", "sunshine_stat": "日照统计", "stress": "压力组合数据", "physical_mental": "身心健康组合数据",
+    "sunshine": "日照记录", "sunshine_stat": "日照统计", "physical_mental": "身心健康组合数据",
 }
 
 # These overrides make the dashboard say what a record actually represents instead of
@@ -161,7 +161,7 @@ KIND_BY_KEY: dict[str, str] = {
     "heart_rate_warning": "event", "blood_oxygen_warning": "event", "blood_pressure": "observation",
     "atrial_fibril": "event", "atrial_fibril_warning": "event", "cardiovascular": "index", "ecg": "observation",
     "weight_target": "snapshot", "blood_sugar_warning": "event", "vitamin": "observation",
-    "stress_detail": "observation", "physical_mental_detail": "observation",
+    "physical_mental_detail": "observation",
     "physical_mental_achievement": "snapshot", "hearing": "observation", "cervical_action": "interval",
     "insight": "snapshot", "physiological_cycle": "interval", "physiological_symptoms": "event",
     "ovulation": "event", "sunshine": "interval",
@@ -218,8 +218,6 @@ DESCRIPTIONS: dict[str, str] = {
     "blood_sugar_stat": "按天或周期汇总的血糖统计，测量类型和统计口径分字段展示。",
     "blood_sugar_warning": "血糖预警事件，不据此生成疾病判断。",
     "vitamin": "维生素或相关健康指标记录，指标、数值和单位按源端字段保存。",
-    "stress_detail": "压力明细或采样记录；压力值、HRV 等字段可能同时存在。",
-    "stress_stat": "按天汇总的压力统计，与压力明细分开保存。",
     "physical_mental_detail": "一条复合身心健康测量/训练记录，可能同时包含身心健康值、HRV、评分和时间偏移；它不是一个单值。",
     "physical_mental_stat": "按天汇总的身心健康统计，身心健康值、状态和其他指标字段保留在详情中。",
     "physical_mental_achievement": "身心健康目标/成就快照，记录日期、目标内容和达成状态；如含分数，按身心健康值区间解释。",
@@ -243,14 +241,13 @@ FIELD_HINTS: dict[str, tuple[str, ...]] = {
     "hearing_stat": ("date 日期", "average/统计值", "left/right 左右耳", "status 状态"),
     "cervical_stat": ("date 日期", "duration 时长", "count 次数", "completion 完成状态"),
     "cervical_action": ("action 动作", "start/end 起止时间", "duration 持续时间", "count 次数"),
-    "stress_detail": ("stressValue 压力值", "RMSSD/SDNN HRV 字段", "start/end 起止时间"),
     "sleep_stat": ("sleepStart/sleepEnd 入睡起床", "deep/light/REM 分期", "score 指数/评分"),
     "sport_stat": ("sportMode 运动模式", "totalSteps 总步数", "totalDistance 总距离", "totalDuration 总时长"),
 }
 
 DAILY = {
     "steps_stat", "sport_stat", "sleep", "sleep_stat", "sleep_index", "sleep_hr_stat", "blood_oxygen_stat",
-    "blood_pressure_stat", "blood_sugar_stat", "heart_rate_stat", "stress_stat", "physical_mental_stat",
+    "blood_pressure_stat", "blood_sugar_stat", "heart_rate_stat", "physical_mental_stat",
     "hearing_stat", "cervical_stat", "snore_stat", "sunshine_stat", "exercise_intensity",
 }
 OBSERVATIONS = {
@@ -262,7 +259,7 @@ UNITS = {
     "blood_oxygen": "%", "blood_oxygen_detail": "%", "steps": "步", "steps_detail": "步", "steps_stat": "步",
     "weight": "kg", "breath_rate": "次/分",
 }
-COMPOSITES = {"stress": ("stress_detail", "stress_stat"), "physical_mental": ("physical_mental_detail", "physical_mental_stat", "physical_mental_achievement")}
+COMPOSITES = {"physical_mental": ("physical_mental_detail", "physical_mental_stat", "physical_mental_achievement")}
 
 
 def build_catalog(endpoint_names: list[str] | tuple[str, ...]) -> dict[str, Metric]:
@@ -317,7 +314,7 @@ def category_names() -> dict[str, str]:
         "sleep": "睡眠与恢复",
         "cardiovascular": "心血管",
         "body": "身体测量",
-        "wellbeing": "压力与身心",
+        "wellbeing": "健康与身心",
         "cycle_environment": "女性健康与环境",
         "other": "其他",
     }

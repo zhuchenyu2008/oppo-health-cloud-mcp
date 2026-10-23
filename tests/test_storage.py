@@ -18,6 +18,26 @@ def test_empty_legacy_db_is_safe(fake_legacy, tmp_path):
     assert repo_empty.refresh_metric("steps") == 0
 
 
+def test_retired_stress_dataset_is_not_public(fake_legacy, tmp_path):
+    catalog = build_catalog(fake_legacy.MCP_METRIC_CHOICES)
+    legacy_path = tmp_path / "legacy-retired-stress.db"
+    con = sqlite3.connect(legacy_path)
+    con.execute("CREATE TABLE cloud_data(metric TEXT,date TEXT,payload TEXT,fetched_at INTEGER,PRIMARY KEY(metric,date))")
+    con.execute(
+        "INSERT INTO cloud_data VALUES(?,?,?,?)",
+        ("stress_detail", "20261021", json.dumps({"date": "20261021", "stressValue": 42}), 1),
+    )
+    con.commit(); con.close()
+
+    repo = Repository(tmp_path / "health-retired-stress.sqlite3", fake_legacy, catalog, legacy_path)
+    assert repo.cached_metrics() == {}
+    assert repo.refresh_metric("stress_detail") == 0
+    assert repo.query_records()["records"] == []
+    with pytest.raises(ValueError, match="METRIC_NOT_FOUND:stress_detail"):
+        repo.query_records(metric_key="stress_detail")
+    assert all(item["metric_key"] != "stress_detail" for item in repo.sync_status()["metrics"])
+
+
 def test_raw_cache_normalizes_idempotently_and_paginates(fake_legacy, tmp_path):
     catalog = build_catalog(fake_legacy.MCP_METRIC_CHOICES)
     legacy_path = tmp_path / "legacy.db"

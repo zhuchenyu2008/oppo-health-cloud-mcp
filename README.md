@@ -1,6 +1,6 @@
 # oppo-health-cloud-mcp
 
-OPPO 健康（欢太健康）云端 API 直连客户端 + MCP server。无需 root / LSPosed，从云端拉取你自己的健康明细数据（心率/血氧/步数/睡眠/体重/腕温/HRV/压力/身心健康/呼吸率等），供任意 AI agent 分析。
+OPPO 健康（欢太健康）云端 API 直连客户端 + MCP server。无需 root / LSPosed，从云端拉取你自己的健康明细数据（心率/血氧/步数/睡眠/体重/腕温/HRV/身心健康/呼吸率等），供任意 AI agent 分析。
 
 > ⚠️ **仅供本人学习研究**。导出的是你自己的健康数据，请勿用于侵犯他人隐私或商用。
 
@@ -67,7 +67,6 @@ httpSecret = XXTEA解密(BuildConfig.httpSecret常量, 两个UUID逐字符交错
 | 睡眠指数 | `sleep_index` | `sleepRecoveryRate`、`sleepRecoveryDiffValue`、`avgSleepSpo2`、睡眠/呼吸/心率合理范围等 |
 | 睡眠 RR 间隔 | `sleep_rr` | `rrIntervalDataList`、`startTimestamp`、`modifiedTimestamp` |
 | HRV | `hrv` | 心率变异性明细，包含 `heartRateVarValue`、`startTimestamp`、`endTimestamp` 等字段 |
-| 压力 | `stress` | `stress_detail` 压力明细（`stressValue`、`stressType`、`rmssd`、`sdnn` 等）和 `stress_stat` 日统计 |
 | 身心健康 | `physical_mental` | `physical_mental_detail` 明细、`physical_mental_stat` 日统计、`physical_mental_achievement` 每日目标与成就 |
 | 呼吸率 | `breath_rate` | 呼吸率记录，外层按时间段保存，逐条读数位于嵌套 `dataList`（含 `respiratoryRate`） |
 | 血氧扩展 | `blood_oxygen_detail` / `blood_oxygen_stat` / `blood_oxygen_warning` / `blood_oxygen_origin` | 血氧明细、日统计、预警和设备原始记录 |
@@ -105,7 +104,7 @@ APK 还声明了健康档案、健康指标、疾病风险和复诊计划接口�
 
 `sport_file` 对应云端加密运动文件，需要应用运行时生成的 `encryptKeyEnc`。当前 MCP 尚未生成该运行时密钥，因此调用会返回 `encrypt_key_enc_required`，不会把版本索引误当成运动轨迹数据。
 
-压力与身心健康的 `cloud_query` 结果按子数据集分组。若 HRV 独立接口没有记录，MCP 会从身心健康明细的 `hrv` 子项生成对应记录，并标注 `source: physical_mental_detail`，同时保留原始 `startTimeOffset`。压力和身心健康结果也会筛选近期记录；版本游标接口按服务端分页规则遍历版本。
+为避免独立压力数据与身心健康值混淆，压力明细和压力统计不再注册到 MCP/网页指标目录，也不会继续同步；历史缓存保留在本地数据库中，但查询接口不会返回。身心健康明细、统计和成就仍正常同步并附带“数值越高越好”的字段语义。若 HRV 独立接口没有记录，MCP 会从身心健康明细的 `hrv` 子项生成对应 HRV 记录，并标注 `source: physical_mental_detail`，同时保留原始 `startTimeOffset`。
 
 ## 踩坑记录（重要）
 
