@@ -27,4 +27,11 @@ def test_mcp_has_only_read_only_tools(settings, fake_legacy):
         "end_date": "2026-10-22",
     }))
     assert query_result
+    physical_query = asyncio.run(app.state.mcp.call_tool("query_health_data", {
+        "metrics": ["physical_mental_detail"],
+        "start_date": "2026-10-01",
+        "end_date": "2026-10-22",
+    }))
+    physical_payload = json.loads(physical_query[0].text)
+    assert physical_payload["metric_context"]["physical_mental_detail"]["value_direction"] == "higher_is_better"
     assert fake_legacy.calls == []
